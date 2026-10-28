@@ -1,0 +1,36 @@
+# Terraform local state and provider binaries
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Cloud Shell / IDE files
+.gemini/
+.config/
+.local/
+.cache/
+.gsutil/
+.docker/
+.lesshst
+.bash_history
+.python_history
+.sudo_as_admin_successful
+.viminfo
+.wget-hsts
