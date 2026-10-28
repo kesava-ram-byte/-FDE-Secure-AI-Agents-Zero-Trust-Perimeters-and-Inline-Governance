@@ -25,6 +25,7 @@
    - [Task 5. Verify Secure Ingress Invocation with a Basic Query](#task-5-verify-secure-ingress-invocation-with-a-basic-query)
    - [Task 6. Enforce the Content Safety Policies with Model Armor and Sensitive Data Protection](#task-6-enforce-the-content-safety-policies-with-model-armor-and-sensitive-data-protection)
    - [Task 7. Test the Content Safety and Sensitive Data Protection Triggers](#task-7-test-the-content-safety-and-sensitive-data-protection-triggers)
+   - [Task 8. Clean Up Lab Resources (Required)](#task-8-clean-up-lab-resources-required)
 6. [Troubleshooting & Operational Notes](#troubleshooting--operational-notes)
 
 ---
@@ -56,6 +57,10 @@ flowchart LR
     subgraph Phase3["Phase 3: Inline Content Safety (Tasks 6–7)"]
         T5 --> T6["Task 6: Model Armor & SDP\n(CONTENT_AUTHZ Extension +\nDLP SSN Redaction Templates)"]
         T6 --> T7["Task 7: Adversarial Testing\n(Prompt Injection Blocking &\nInline PII Redaction)"]
+    end
+
+    subgraph Phase4["Phase 4: Teardown & Quota Release (Task 8)"]
+        T7 --> T8["Task 8: Clean Up Lab Resources\n(Ordered Deletion of Runtime,\nAuthz Policies & Gateway)"]
     end
 ```
 
@@ -825,6 +830,54 @@ curl -s -X POST "https://${REGION}-aiplatform.googleapis.com/v1beta1/projects/${
 ```
 
 **How it works:** Model Armor's Advanced SDP integration inspects the JSON-RPC payload using `agw-ssn-inspect-template` and mutates the request body in flight using `agw-ssn-redaction-template` (`replace_with_info_type_config = true`), replacing `555-01-9999` with `[US_SOCIAL_SECURITY_NUMBER]` before the Cloud Run MCP server receives the payload.
+
+---
+
+### Task 8. Clean Up Lab Resources (Required)
+
+In this task, you execute the lab cleanup script ([`scripts/lab-cleanup.sh`](scripts/lab-cleanup.sh)) to delete the Agent Runtime, authorization policies, and Agent Gateway before ending the lab session.
+
+> **Important:** Running this cleanup task is a required action before ending your lab. Agent Gateway resources have limited regional quota availability in Qwiklabs environments. Running this script ensures that all allocated Agent Gateways, authorization policies, and runtime instances are immediately released.
+
+> **Caution:** Ensure you have completed all previous tasks and that you have clicked **Check my progress** for each task so that your full score is reflected. Once you run this cleanup script and delete the resources, earlier assessment checks will no longer pass.
+
+#### 8.1 Execute the Cleanup Script
+
+In the Cloud Shell terminal, make the cleanup script executable and run it using the following commands:
+
+```bash
+chmod +x ~/scripts/lab-cleanup.sh
+~/scripts/lab-cleanup.sh
+```
+
+#### 8.2 Verify the Cleanup Output
+
+Verify in the output that the reasoning engine, authorization policies, and Agent Gateway are successfully deleted:
+
+```text
+CLEANUP-SCRIPT START
+Target Project: qwiklabs-gcp-xx-xxxxxxxxxxxx
+Target Region:  us-central1
+--------------------------------------------------
+[1/3] Deleting Agent Runtime reasoning engine(s)...
+  -> Deleting Reasoning Engine: xxxxxxxxxxxx
+[2/3] Deleting Authz Policies attached to the gateway...
+  -> Deleting Authz Policy: agw-iap-authz-policy
+  -> Deleting Authz Policy: agw-model-armor-authz-policy
+[3/3] Deleting Agent Gateways in region us-central1...
+  -> Deleting Agent Gateway: gateway-egress
+--------------------------------------------------
+Agent Gateways successfully cleared.
+CLEANUP-SCRIPT END
+```
+
+#### 8.3 Why Ordered Deletion Is Required
+
+In Google Cloud Network Services and Vertex AI Agent Runtime, zero-trust perimeter components maintain strict parent-child resource references:
+
+1. **Step `[1/3]` — Delete Reasoning Engine (`reasoningEngines?force=true`)**: The Agent Runtime holds an active attachment (`spec.deploymentSpec.agentGatewayConfig`) and Private Service Connect endpoint bound to the Agent Gateway. Deleting the Reasoning Engine first releases the consumer reference.
+2. **Step `[2/3]` — Delete Network Security Authz Policies (`gcloud network-security authz-policies delete`)**: Both the IAP `REQUEST_AUTHZ` policy (`gateway-egress-authz-policy`) and Model Armor `CONTENT_AUTHZ` policy (`gateway-egress-ma-policy`) target `gateway-egress` as their resource target. Google Cloud prevents deleting an Agent Gateway while any `AuthzPolicy` still references it.
+3. **Step `[3/3]` — Delete Agent Gateway (`gcloud network-services agent-gateways delete`)**: Once all runtime and policy attachments are detached, `gateway-egress` can be cleanly deprovisioned, immediately freeing regional Internal Application Load Balancer and PSC quota.
 
 ---
 
